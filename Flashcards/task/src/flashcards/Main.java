@@ -5,21 +5,25 @@ import java.util.*;
 
 public class Main {
     private static final Scanner scanner = new Scanner(System.in);
-    private static final String MENU_MESSAGE = "Input the action (add, remove, import, export, ask, exit, log, hardest card, reset stats):\n";
-    private static Map<String, String> cards;
+    private static final String MENU_MESSAGE = "\nInput the action (add, remove, import, export, ask, exit, log, hardest card, reset stats):\n";
+//    private static Map<String, String> cards;
+    private static CardService service;
     private static List<String> log;
     private static String card;
     private static String definition;
     private static int numberOfQuestions;
-    private static Iterator<Map.Entry<String, String>> it;
-    private static Map.Entry<String, String> currentCard;
+//    private static Iterator<Map.Entry<String, String>> it;
+    private static Iterator<Card> it;
+//    private static Map.Entry<String, String> currentCard;
+    private static Card currentCard;
 
     public static void main(String[] args) {
         String input;
 
         String message = MENU_MESSAGE;
         InputState state = InputState.INPUT_ACTION;
-        cards = new LinkedHashMap<>();
+//        cards = new LinkedHashMap<>();
+        service = new CardService();
         log = new LinkedList<>();
 
         while (true) {
@@ -56,11 +60,36 @@ public class Main {
                             state = InputState.NUMBER_OF_QUESTIONS;
                             break;
                         case "exit":
-                            message = "Bye bye!\n";
+                            message = "Bye bye!";
                             break;
                         case "log":
                             message = "File name:\n";
                             state = InputState.FILENAME_FOR_LOG;
+                            break;
+                        case "hardest card":
+                            List<Card> hardest = service.getHardest();
+                            if (hardest == null) {
+                                message = "There are no cards with errors.\n";
+                            } else {
+                                if (hardest.size() > 1) {
+                                    String merge = hardest.get(0).getCard();
+                                    for (int i = 1; i < hardest.size(); i++) {
+                                        merge += "\", \"";
+                                        merge += hardest.get(i).getCard();
+                                    }
+                                    message = String.format("The hardest cards are \"%s\". You have %d errors answering them.\n", merge, hardest.get(0).getStat());
+                                } else {
+                                    message = String.format("The hardest card is \"%s\". You have %d errors answering it.\n", hardest.get(0).getCard(), hardest.get(0).getStat());
+                                }
+                            }
+                            message += MENU_MESSAGE;
+                            state = InputState.INPUT_ACTION;
+                            break;
+                        case "reset stats":
+                            service.resetStat();
+                            message = "Card statistics have been reset.\n";
+                            message += MENU_MESSAGE;
+                            state = InputState.INPUT_ACTION;
                             break;
                         default:
                             message = "Unknown command\n";
@@ -69,7 +98,13 @@ public class Main {
                     break;
                 case CARD_TITLE:
                     card = input;
-                    if (cards.containsKey(card)) {
+//                    if (cards.containsKey(card)) {
+//                        message = String.format("The card \"%s\" already exists.\n", card);
+//                        message += MENU_MESSAGE;
+//                        state = InputState.INPUT_ACTION;
+//                        break;
+//                    }
+                    if (service.containsCardTitle(card)) {
                         message = String.format("The card \"%s\" already exists.\n", card);
                         message += MENU_MESSAGE;
                         state = InputState.INPUT_ACTION;
@@ -80,19 +115,27 @@ public class Main {
                     break;
                 case CARD_DEFINITION:
                     definition = input;
-                    if (cards.containsValue(definition)) {
+//                    if (cards.containsValue(definition)) {
+//                        message = String.format("The definition \"%s\" already exists.\n", definition);
+//                        message += MENU_MESSAGE;
+//                        state = InputState.INPUT_ACTION;
+//                        break;
+//                    }
+                    if (service.containsCardDefinition(definition)) {
                         message = String.format("The definition \"%s\" already exists.\n", definition);
                         message += MENU_MESSAGE;
                         state = InputState.INPUT_ACTION;
                         break;
                     }
-                    cards.put(card, definition);
+//                    cards.put(card, definition);
+                    service.addCard(new Card(card, definition));
                     message = String.format("The pair (\"%s\":\"%s\") has been added.\n", card, definition);
                     message += MENU_MESSAGE;
                     state = InputState.INPUT_ACTION;
                     break;
                 case CARD_TITLE_TO_REMOVE:
-                    String removed = cards.remove(input);
+//                    String removed = cards.remove(input);
+                    String removed = service.remove(input);
                     message = removed == null ?
                             String.format("Can't remove \"%s\": there is no such card.\n", input) :
                             "The card has been removed.";
@@ -100,31 +143,43 @@ public class Main {
                     state = InputState.INPUT_ACTION;
                     break;
                 case ANSWER:
-                    if (input.equals(currentCard.getValue())) {
-                        System.out.println("Correct!");
+//                    if (input.equals(currentCard.getValue())) {
+//                        System.out.println("Correct!");
+//                    } else {
+//                        if (cards.containsValue(input)) {
+//                            for (var el2 : cards.entrySet()) {
+//                                if (el2.getValue().equals(input)) {
+//                                    System.out.printf("Wrong. The right answer is \"%s\", " +
+//                                            "but your definition is correct for \"%s\".\n", currentCard.getValue(), el2.getKey());
+//                                }
+//                            }
+//                        } else {
+//                            System.out.printf("Wrong. The right answer is \"%s\".\n", currentCard.getValue());
+//                        }
+//                    }
+                    if (input.equals(currentCard.getDefinition())) {
+                        message = "Correct!\n";
                     } else {
-                        if (cards.containsValue(input)) {
-                            for (var el2 : cards.entrySet()) {
-                                if (el2.getValue().equals(input)) {
-                                    System.out.printf("Wrong. The right answer is \"%s\", " +
-                                            "but your definition is correct for \"%s\".\n", currentCard.getValue(), el2.getKey());
-                                }
-                            }
+                        currentCard.setStat(currentCard.getStat() + 1);
+                        Card card = service.getByDefinition(input);
+                        if (card != null) {
+                            message = String.format("Wrong. The right answer is \"%s\", " +
+                                    "but your definition is correct for \"%s\".\n", currentCard.getDefinition(), card.getCard());
                         } else {
-                            System.out.printf("Wrong. The right answer is \"%s\".\n", currentCard.getValue());
+                            message = String.format("Wrong. The right answer is \"%s\".\n", currentCard.getDefinition());
                         }
                     }
                     numberOfQuestions--;
                     if (numberOfQuestions == 0) {
-                        message = MENU_MESSAGE;
+                        message += MENU_MESSAGE;
                         state = InputState.INPUT_ACTION;
                         break;
                     }
                     if (!it.hasNext()) {
-                        it = cards.entrySet().iterator();
+                        it = service.getIterator();
                     }
                     currentCard = it.next();
-                    message = String.format("Print the definition of \"%s\":", currentCard.getKey());
+                    message += String.format("Print the definition of \"%s\":\n", currentCard.getCard());
                     break;
                 case FILENAME_FOR_EXPORT:
                     message = writeFile(input);
@@ -138,9 +193,10 @@ public class Main {
                     break;
                 case NUMBER_OF_QUESTIONS:
                     numberOfQuestions = Integer.parseInt(input);
-                    it = cards.entrySet().iterator();
+//                    it = cards.entrySet().iterator();
+                    it = service.getIterator();
                     currentCard = it.next();
-                    message = String.format("Print the definition of \"%s\":", currentCard.getKey());
+                    message = String.format("Print the definition of \"%s\":\n", currentCard.getCard());
                     state = InputState.ANSWER;
                     break;
                 case FILENAME_FOR_LOG:
@@ -178,8 +234,9 @@ public class Main {
             String line;
             int counter = 0;
             while ((line = br.readLine()) != null) {
-                cards.put(line.split(":")[0].trim(), line.split(":")[1].trim());
-                System.out.println(line);
+//                cards.put(line.split(":")[0].trim(), line.split(":")[1].trim());
+//                System.out.println(line);
+                service.addCard(line);
                 counter++;
             }
             message = counter + " cards have been loaded.\n";
@@ -192,11 +249,16 @@ public class Main {
     static String writeFile (String file) {
         String message;
         try (BufferedWriter bw = new BufferedWriter(new FileWriter(file))) {
-            for (Map.Entry<String, String> line : cards.entrySet()) {
-                bw.write(line.getKey() + " : " + line.getValue() + "\n");
+//            for (Map.Entry<String, String> line : cards.entrySet()) {
+//                bw.write(line.getKey() + " : " + line.getValue() + "\n");
+//            }
+            int counter = 0;
+            for (String s: service.listCards()) {
+                bw.write(s + "\n");
+                counter++;
             }
             bw.flush();
-            message = cards.size() + " cards have been saved.\n";
+            message = counter + " cards have been saved.\n";
         } catch (IOException e) {
             message = "error\n";
         }

@@ -16,20 +16,41 @@ public class Main {
     private static Iterator<Card> it;
 //    private static Map.Entry<String, String> currentCard;
     private static Card currentCard;
+    private static String importFile;
+    private static String exportFile;
 
     public static void main(String[] args) {
+        //initial variables
         String input;
-
-        String message = MENU_MESSAGE;
+        String message;
         InputState state = InputState.INPUT_ACTION;
 //        cards = new LinkedHashMap<>();
         service = new CardService();
         log = new LinkedList<>();
 
+        //parsing args
+        for (int i = 0; i < args.length; i++) {
+            if ("-import".equals(args[i])) {
+                importFile = args[i + 1];
+            }
+            if ("-export".equals(args[i])) {
+                exportFile = args[i + 1];
+            }
+        }
+
+        //import cards if specified
+        if (importFile != null) {
+            message = readFile(importFile);
+            System.out.print(message);
+            log.add(message);
+        }
+
+        //start main cycle
+        message = MENU_MESSAGE;
         while (true) {
             System.out.print(message);
             log.add(message);
-            if ("Bye bye!".equals(message)) {
+            if (message.contains("Bye bye!")) {
                 return;
             }
 
@@ -60,7 +81,11 @@ public class Main {
                             state = InputState.NUMBER_OF_QUESTIONS;
                             break;
                         case "exit":
-                            message = "Bye bye!";
+                            message = "";
+                            if (exportFile != null) {
+                                message = writeFile(exportFile);
+                            }
+                            message += "Bye bye!\n";
                             break;
                         case "log":
                             message = "File name:\n";
